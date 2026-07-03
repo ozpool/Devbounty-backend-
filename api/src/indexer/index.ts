@@ -5,7 +5,11 @@ import { env } from '../shared/config/env.js';
 import { connectDb, registerShutdownHandlers } from '../shared/config/db.js';
 import { logger } from '../shared/utils/logger.js';
 import { initSentry } from '../shared/utils/sentry.js';
-import { getPublicClient, getEscrowAddress, isIndexerConfigured } from '../shared/chain/clients.js';
+import {
+  getIndexerReadClient,
+  getEscrowAddress,
+  isIndexerConfigured,
+} from '../shared/chain/clients.js';
 import { escrowAbi } from '../shared/chain/escrowAbi.js';
 import { reconcileFailedReleases } from '../shared/bounty/settleMerge.js';
 import { IndexerStateModel } from '../shared/models/index.js';
@@ -89,7 +93,7 @@ async function saveLastBlock(block: bigint): Promise<void> {
 }
 
 async function scanRange(escrow: Address, fromBlock: bigint, toBlock: bigint): Promise<void> {
-  const logs = await getPublicClient().getContractEvents({
+  const logs = await getIndexerReadClient().getContractEvents({
     address: escrow,
     abi: escrowAbi,
     fromBlock,
@@ -113,7 +117,7 @@ async function scanRange(escrow: Address, fromBlock: bigint, toBlock: bigint): P
 // Returns true while still behind the confirmed head (range cap was hit), so the
 // caller can poll again immediately instead of waiting a full interval.
 async function tick(escrow: Address): Promise<boolean> {
-  const head = await getPublicClient().getBlockNumber();
+  const head = await getIndexerReadClient().getBlockNumber();
   const confirmed = head - BigInt(env.INDEXER_CONFIRMATIONS);
   const last = await loadLastBlock();
   if (confirmed <= last) return false;
