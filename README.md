@@ -1,18 +1,18 @@
 <div align="center">
 
-# DevBounty — Backend
+# DevBounty - Backend
 
 **A decentralized bug-bounty platform.**
 USDC-collateralised. Self-custodial escrow. Paid automatically on merge. Built for Arbitrum.
 
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](api/)
-[![Node](https://img.shields.io/badge/Node-20–22-339933?style=flat-square&logo=nodedotjs&logoColor=white)](api/)
+[![Node](https://img.shields.io/badge/Node-20--22-339933?style=flat-square&logo=nodedotjs&logoColor=white)](api/)
 [![Express](https://img.shields.io/badge/Express-5-000?style=flat-square&logo=express&logoColor=white)](api/)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8-363636?style=flat-square&logo=solidity)](contracts/)
 [![Hardhat](https://img.shields.io/badge/Hardhat-tested-FFF100?style=flat-square)](contracts/)
 [![Arbitrum](https://img.shields.io/badge/Arbitrum-Sepolia-28A0F0?style=flat-square)](#status)
-[![Tests](https://img.shields.io/badge/tests-152%20passing-0fa56a?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-162%20passing-0fa56a?style=flat-square)](#testing)
 [![Status](https://img.shields.io/badge/status-testnet-blueviolet?style=flat-square)](#status)
 
 </div>
@@ -28,7 +28,7 @@ pull request, GitHub notifies the backend, which verifies the merge and **releas
 USDC to the hunter on-chain**. Hunters build public reputation through profiles and a leaderboard.
 
 The escrow is self-custodial: funds sit in `BountyEscrow` until released. The backend's key can
-only _release to a hunter_ — it can never divert or refund — so a compromised key cannot steal
+only _release to a hunter_ - it can never divert or refund - so a compromised key cannot steal
 funds. The blockchain is the source of truth for money; the database is the source of truth for
 workflow, and may lag the chain but never contradict it.
 
@@ -40,14 +40,14 @@ The web frontend lives in a separate repository.
 ## Capabilities
 
 - **Self-custodial escrow.** USDC stays in `BountyEscrow` until an authorized `release()` pays the
-  hunter. Access is split on-chain — the backend can release, only the maintainer can refund.
+  hunter. Access is split on-chain - the backend can release, only the maintainer can refund.
 - **Automatic payout on merge.** A GitHub merge webhook is HMAC-verified, then strictly
   authorized (merged into the default branch, in the bounty's repo, by the claiming hunter)
   before the on-chain release fires. A maintainer manual-release covers a missed webhook.
 - **Wallet identity.** Sign-In-With-Ethereum (EIP-4361) login with full signature recovery and a
   one-time server-side nonce, plus GitHub account linking via OAuth with tokens encrypted at rest.
 - **Sybil-resistant claims.** One GitHub identity per wallet, a per-wallet active-claim cap, and a
-  re-claim cooldown — enforced atomically so the cap can never be exceeded.
+  re-claim cooldown - enforced atomically so the cap can never be exceeded.
 - **Single-owner payout.** The `submitted → releasing` transition is atomic; only the one caller
   that performs it can pay, so a bounty can never be released twice.
 - **Chain indexer.** A single-instance (DB-leased) poller mirrors `BountyCreated/Released/Refunded`
@@ -64,15 +64,26 @@ The web frontend lives in a separate repository.
 
 What works today on testnet, and what stands between it and a live, real-money product.
 
-| Capability                                                   | State                                | What it needs                          |
-| ------------------------------------------------------------ | ------------------------------------ | -------------------------------------- |
-| Full bounty lifecycle (create → fund → claim → submit → pay) | Works on Arbitrum Sepolia            | —                                      |
-| Automatic on-merge payout                                    | Works (proven end-to-end on testnet) | —                                      |
-| Quality gates (typecheck · lint · 152 tests)                 | Green                                | —                                      |
-| Reachable on the internet                                    | Not deployed yet                     | Render (API) deploy + env + keep-alive |
-| Handle real money                                            | Test USDC only                       | Mainnet deploy + real USDC             |
-| Production key custody                                       | Env key on testnet                   | KMS/HSM signer before mainnet          |
-| Security audit                                               | None                                 | External audit before real funds       |
+| Capability                                                   | State                                | What it needs                    |
+| ------------------------------------------------------------ | ------------------------------------ | -------------------------------- |
+| Full bounty lifecycle (create → fund → claim → submit → pay) | Works on Arbitrum Sepolia            | -                                |
+| Automatic on-merge payout                                    | Works (proven end-to-end on testnet) | -                                |
+| Quality gates (typecheck · lint · 162 tests)                 | Green                                | -                                |
+| Reachable on the internet                                    | Live on Render                       | -                                |
+| Handle real money                                            | Test USDC only                       | Mainnet deploy + real USDC       |
+| Production key custody                                       | Env key on testnet                   | KMS/HSM signer before mainnet    |
+| Security audit                                               | None                                 | External audit before real funds |
+
+---
+
+## Deployed contracts
+
+Live and source-verified on **Arbitrum Sepolia** (testnet):
+
+| Contract     | Address                                                                                                                             |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| BountyEscrow | [`0x8B71467B545aEdC0F4fc2094c46efEe2CB47Da9F`](https://sepolia.arbiscan.io/address/0x8B71467B545aEdC0F4fc2094c46efEe2CB47Da9F#code) |
+| USDC (mock)  | [`0x3FD372BF3AE46539e5F07D9Bc00c2E5dfA0F0E2e`](https://sepolia.arbiscan.io/address/0x3FD372BF3AE46539e5F07D9Bc00c2E5dfA0F0E2e#code) |
 
 ---
 
@@ -80,7 +91,7 @@ What works today on testnet, and what stands between it and a live, real-money p
 
 | Layer                | Stack                                                                |
 | -------------------- | -------------------------------------------------------------------- |
-| API                  | Node.js 20–22 · Express · TypeScript (ESM)                           |
+| API                  | Node.js 20-22 · Express · TypeScript (ESM)                           |
 | Validation / logging | zod · pino                                                           |
 | Auth                 | SIWE (EIP-4361) · JWT (HS256) · AES-256-GCM token encryption at rest |
 | Chain access         | viem (public + wallet clients)                                       |
@@ -133,7 +144,7 @@ flowchart LR
     class DB store
 ```
 
-### Payout lifecycle — one bounty, end to end
+### Payout lifecycle - one bounty, end to end
 
 ```mermaid
 sequenceDiagram
@@ -147,7 +158,7 @@ sequenceDiagram
     participant Ix as Indexer
 
     Sp->>API: create bounty (pending_deposit)
-    Sp->>Ch: approve + create() — USDC escrowed
+    Sp->>Ch: approve + create() - USDC escrowed
     Ch-->>Ix: BountyCreated
     Ix->>API: mark bounty open
     Hu->>API: claim + submit pull request
@@ -163,7 +174,7 @@ sequenceDiagram
 
 ## Getting Started
 
-Requires Node.js 20–22, MongoDB, and an Arbitrum Sepolia RPC URL.
+Requires Node.js 20-22, MongoDB, and an Arbitrum Sepolia RPC URL.
 
 ```bash
 npm install
@@ -179,7 +190,7 @@ without them the contract-independent API runs on its own.
 ```bash
 npm -w @devbounty/api run typecheck
 npm -w @devbounty/api run lint
-npm -w @devbounty/api run test       # 152 tests (Vitest + supertest + in-memory Mongo)
+npm -w @devbounty/api run test       # 162 tests (Vitest + supertest + in-memory Mongo)
 ```
 
 Contracts are tested separately with Hardhat (lifecycle, access control, reentrancy):
