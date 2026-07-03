@@ -57,9 +57,17 @@ const chainEnv = z.object({
   BACKEND_PRIVATE_KEY: z.string().optional(),
   // Reorg buffer: the indexer only processes events this many blocks behind head.
   INDEXER_CONFIRMATIONS: z.coerce.number().int().nonnegative().default(5),
-  // Max blocks scanned per getLogs call. Public/free RPC tiers cap this hard
-  // (Alchemy free allows only 10), so it is configurable per environment.
+  // Max blocks per getLogs call on the backfill source (INDEXER_RPC_URL). This
+  // is the large-range path used for deep catch-up; the primary RPC uses
+  // INDEXER_TIP_RANGE near the tip instead.
   INDEXER_MAX_RANGE: z.coerce.number().int().positive().default(2000),
+  // Blocks below head reserved for the authoritative primary RPC. The backfill
+  // index can lag the chain tip, so it is only used at or below head - this,
+  // where its data is settled. Should be >= INDEXER_CONFIRMATIONS.
+  INDEXER_TIP_SAFETY: z.coerce.number().int().nonnegative().default(300),
+  // Per-call getLogs range for tip scans on the primary RPC, whose free tier
+  // caps it hard (Arbitrum Sepolia + Alchemy free = 10 blocks).
+  INDEXER_TIP_RANGE: z.coerce.number().int().positive().default(10),
   // First block to scan on a cold start (the escrow's deploy block).
   INDEXER_START_BLOCK: z.coerce.number().int().nonnegative().default(0),
   // Health marks the indexer stale once its checkpoint heartbeat is older than
