@@ -44,6 +44,11 @@ const chainEnv = z.object({
   CHAIN_ID: z.coerce.number().int().positive().default(421614),
   RPC_URL_HTTP: requiredInProd('http://localhost:8545'),
   RPC_URL_HTTP_FALLBACK: z.string().optional(),
+  // Dedicated RPC for the indexer's historical log reads (e.g. Envio HyperRPC,
+  // which serves large getLogs ranges that free public tiers cap hard). Only the
+  // indexer's head-block and getContractEvents calls use it; all on-chain writes
+  // and state reads stay on RPC_URL_HTTP. Unset → the indexer reuses RPC_URL_HTTP.
+  INDEXER_RPC_URL: z.string().optional(),
   // The deployed BountyEscrow address. Optional until a deploy exists; payout
   // and the indexer are inert without it.
   ESCROW_ADDRESS: z.string().optional(),

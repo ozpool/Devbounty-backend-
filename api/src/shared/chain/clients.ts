@@ -15,13 +15,14 @@ import { env } from '../config/env.js';
 import { escrowAbi } from './escrowAbi.js';
 
 // Built from CHAIN_ID/RPC rather than a hardcoded chain so the same code runs
-// against Arbitrum Sepolia and a local node.
-function buildChain() {
+// against Arbitrum Sepolia and a local node. The url defaults to the primary
+// RPC but can be overridden (the indexer reads from a separate endpoint).
+function buildChain(url: string = env.RPC_URL_HTTP) {
   return defineChain({
     id: env.CHAIN_ID,
     name: `chain-${env.CHAIN_ID}`,
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-    rpcUrls: { default: { http: [env.RPC_URL_HTTP] } },
+    rpcUrls: { default: { http: [url] } },
   });
 }
 
@@ -31,6 +32,19 @@ export function getPublicClient(): PublicClient {
     publicClient = createPublicClient({ chain: buildChain(), transport: http(env.RPC_URL_HTTP) });
   }
   return publicClient;
+}
+
+// A read-only client for the indexer's historical scans, kept separate from the
+// primary client so it can point at an RPC (e.g. Envio HyperRPC) that serves the
+// large getLogs ranges free public tiers cap hard — without affecting on-chain
+// writes/state reads. Falls back to RPC_URL_HTTP when INDEXER_RPC_URL is unset.
+let indexerReadClient: PublicClient | undefined;
+export function getIndexerReadClient(): PublicClient {
+  if (!indexerReadClient) {
+    const url = env.INDEXER_RPC_URL || env.RPC_URL_HTTP;
+    indexerReadClient = createPublicClient({ chain: buildChain(url), transport: http(url) });
+  }
+  return indexerReadClient;
 }
 
 /** The deployed escrow address, validated. Throws if unset/malformed. */
