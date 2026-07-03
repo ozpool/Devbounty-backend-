@@ -1,12 +1,14 @@
 import { pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
-import { type Address } from 'viem';
+import { type Address, type PublicClient } from 'viem';
 import { env } from '../shared/config/env.js';
 import { connectDb, registerShutdownHandlers } from '../shared/config/db.js';
 import { logger } from '../shared/utils/logger.js';
 import { initSentry } from '../shared/utils/sentry.js';
 import {
+  getPublicClient,
   getIndexerReadClient,
+  isBackfillRpcConfigured,
   getEscrowAddress,
   isIndexerConfigured,
 } from '../shared/chain/clients.js';
@@ -14,6 +16,7 @@ import { escrowAbi } from '../shared/chain/escrowAbi.js';
 import { reconcileFailedReleases } from '../shared/bounty/settleMerge.js';
 import { IndexerStateModel } from '../shared/models/index.js';
 import { handleBountyCreated, handleBountyReleased, handleBountyRefunded } from './handlers.js';
+import { planScan } from './scanPlan.js';
 
 const STATE_ID = 'singleton';
 const POLL_INTERVAL_MS = 5_000;
@@ -28,7 +31,10 @@ const RECONCILE_EVERY_TICKS = 12;
 // a small range cap can still keep pace with a fast chain instead of falling
 // permanently behind.
 const CATCHUP_INTERVAL_MS = 500;
-const MAX_RANGE = BigInt(env.INDEXER_MAX_RANGE); // blocks per getLogs call (RPC-tier limited)
+const MAX_RANGE = BigInt(env.INDEXER_MAX_RANGE); // backfill source per-call block span
+const TIP_RANGE = BigInt(env.INDEXER_TIP_RANGE); // primary source per-call span near the tip
+const TIP_SAFETY = BigInt(env.INDEXER_TIP_SAFETY); // blocks below head reserved for the primary source
+const CONFIRMATIONS = BigInt(env.INDEXER_CONFIRMATIONS);
 const BACKOFF_CAP_MS = 30_000;
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -92,8 +98,13 @@ async function saveLastBlock(block: bigint): Promise<void> {
   );
 }
 
-async function scanRange(escrow: Address, fromBlock: bigint, toBlock: bigint): Promise<void> {
-  const logs = await getIndexerReadClient().getContractEvents({
+async function scanRange(
+  client: PublicClient,
+  escrow: Address,
+  fromBlock: bigint,
+  toBlock: bigint,
+): Promise<void> {
+  const logs = await client.getContractEvents({
     address: escrow,
     abi: escrowAbi,
     fromBlock,
@@ -113,19 +124,31 @@ async function scanRange(escrow: Address, fromBlock: bigint, toBlock: bigint): P
   }
 }
 
-// Advance once: scan the next confirmed, range-capped window and checkpoint it.
-// Returns true while still behind the confirmed head (range cap was hit), so the
-// caller can poll again immediately instead of waiting a full interval.
+// Advance once: plan the next window, scan it from the right source, checkpoint
+// it. Returns true while still behind the confirmed head, so the caller can poll
+// again immediately instead of waiting a full interval.
+//
+// Head comes from the primary (authoritative) RPC — never the backfill index,
+// whose reported head can run ahead of the logs it has actually indexed. The
+// planner then keeps the backfill source below the tip-safety margin and scans
+// the tip from the primary RPC, so a freshly-mined event is never skipped.
 async function tick(escrow: Address): Promise<boolean> {
-  const head = await getIndexerReadClient().getBlockNumber();
-  const confirmed = head - BigInt(env.INDEXER_CONFIRMATIONS);
+  const head = await getPublicClient().getBlockNumber();
   const last = await loadLastBlock();
-  if (confirmed <= last) return false;
-  const capped = last + MAX_RANGE < confirmed;
-  const to = capped ? last + MAX_RANGE : confirmed;
-  await scanRange(escrow, last + 1n, to);
-  await saveLastBlock(to);
-  return capped;
+  const plan = planScan({
+    head,
+    last,
+    confirmations: CONFIRMATIONS,
+    tipSafety: TIP_SAFETY,
+    maxRange: MAX_RANGE,
+    tipRange: TIP_RANGE,
+    backfillConfigured: isBackfillRpcConfigured(),
+  });
+  if (!plan) return false;
+  const client = plan.source === 'backfill' ? getIndexerReadClient() : getPublicClient();
+  await scanRange(client, escrow, plan.from, plan.to);
+  await saveLastBlock(plan.to);
+  return plan.behind;
 }
 
 // The poll loop, shared by the standalone process and the in-process co-host.
