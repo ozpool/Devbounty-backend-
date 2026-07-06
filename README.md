@@ -12,7 +12,7 @@ USDC-collateralised. Self-custodial escrow. Paid automatically on merge. Built f
 [![Solidity](https://img.shields.io/badge/Solidity-0.8-363636?style=flat-square&logo=solidity)](contracts/)
 [![Hardhat](https://img.shields.io/badge/Hardhat-tested-FFF100?style=flat-square)](contracts/)
 [![Arbitrum](https://img.shields.io/badge/Arbitrum-Sepolia-28A0F0?style=flat-square)](#status)
-[![Tests](https://img.shields.io/badge/tests-162%20passing-0fa56a?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-182%20passing-0fa56a?style=flat-square)](#testing)
 [![Status](https://img.shields.io/badge/status-testnet-blueviolet?style=flat-square)](#status)
 
 </div>
@@ -52,7 +52,9 @@ The web frontend lives in a separate repository.
   that performs it can pay, so a bounty can never be released twice.
 - **Chain indexer.** A single-instance (DB-leased) poller mirrors `BountyCreated/Released/Refunded`
   into MongoDB; reputation is recomputed from an append-only ledger, so a replayed event can never
-  double-count.
+  double-count. It reads the live tip from the primary RPC and can replay long gaps after downtime
+  in seconds via a large-range backfill RPC (`INDEXER_RPC_URL`, e.g. Envio HyperRPC), never trusting
+  that lagging index at the tip.
 - **Hardened API.** Strict CORS + Origin CSRF check, per-IP and per-wallet rate limits, pinned-HS256
   JWT sessions, idempotency keys on writes, and structured logging with secret redaction.
 - **Free-tier hostable.** The indexer can run as its own worker or co-host inside the API
@@ -68,7 +70,7 @@ What works today on testnet, and what stands between it and a live, real-money p
 | ------------------------------------------------------------ | ------------------------------------ | -------------------------------- |
 | Full bounty lifecycle (create → fund → claim → submit → pay) | Works on Arbitrum Sepolia            | -                                |
 | Automatic on-merge payout                                    | Works (proven end-to-end on testnet) | -                                |
-| Quality gates (typecheck · lint · 162 tests)                 | Green                                | -                                |
+| Quality gates (typecheck · lint · 182 tests)                 | Green                                | -                                |
 | Reachable on the internet                                    | Live on Render                       | -                                |
 | Handle real money                                            | Test USDC only                       | Mainnet deploy + real USDC       |
 | Production key custody                                       | Env key on testnet                   | KMS/HSM signer before mainnet    |
@@ -120,7 +122,8 @@ flowchart LR
     end
     DB[("MongoDB")]
     IX["Chain indexer<br/>(single instance, DB-leased)"]
-    AL["Alchemy<br/>RPC node"]
+    AL["Alchemy<br/>RPC node (tip + writes)"]
+    HS["Backfill RPC<br/>(Envio HyperRPC)"]
     ESC["Arbitrum Sepolia<br/>BountyEscrow (USDC)"]
     GH["GitHub<br/>merge webhook"]
 
@@ -133,13 +136,15 @@ flowchart LR
     S -- "release()" --> AL
     AL --> ESC
     ESC -- "events" --> AL
-    AL --> IX
+    ESC -- "events" --> HS
+    AL -- "tip logs" --> IX
+    HS -- "deep backfill" --> IX
     IX --> DB
 
     classDef chain fill:#fef2f2,stroke:#d63044,color:#7f1d1d
     classDef svc fill:#fffbeb,stroke:#d97706,color:#78350f
     classDef store fill:#f4f3f8,stroke:#736b8a,color:#3d3656
-    class ESC,AL chain
+    class ESC,AL,HS chain
     class R,S,IX svc
     class DB store
 ```
@@ -190,7 +195,7 @@ without them the contract-independent API runs on its own.
 ```bash
 npm -w @devbounty/api run typecheck
 npm -w @devbounty/api run lint
-npm -w @devbounty/api run test       # 162 tests (Vitest + supertest + in-memory Mongo)
+npm -w @devbounty/api run test       # 182 tests (Vitest + supertest + in-memory Mongo)
 ```
 
 Contracts are tested separately with Hardhat (lifecycle, access control, reentrancy):
