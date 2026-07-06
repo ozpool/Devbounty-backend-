@@ -47,6 +47,12 @@ export function getIndexerReadClient(): PublicClient {
   return indexerReadClient;
 }
 
+/** True when a distinct backfill RPC is set, so the indexer can use it for deep
+ * ranges. When false, getIndexerReadClient() is just the primary RPC. */
+export function isBackfillRpcConfigured(): boolean {
+  return Boolean(env.INDEXER_RPC_URL);
+}
+
 /** The deployed escrow address, validated. Throws if unset/malformed. */
 export function getEscrowAddress(): Address {
   const raw = env.ESCROW_ADDRESS;

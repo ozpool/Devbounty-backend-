@@ -48,3 +48,12 @@ describe('getIndexerReadClient', () => {
     expect(rpcOf(getIndexerReadClient())).toBe(INDEXER);
   });
 });
+
+describe('isBackfillRpcConfigured', () => {
+  it('is true only when INDEXER_RPC_URL is set', async () => {
+    const set = await loadClients(INDEXER);
+    expect(set.isBackfillRpcConfigured()).toBe(true);
+    const unset = await loadClients(undefined);
+    expect(unset.isBackfillRpcConfigured()).toBe(false);
+  });
+});
